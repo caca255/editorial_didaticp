@@ -223,10 +223,10 @@ export default function EditorCard({
             {/* Elegant Quotation block */}
             <div className="bg-white border-l-4 border-blue-500 rounded-r-lg p-3 text-xs italic text-slate-600 block relative">
               <p className="line-clamp-3">"{latestComment.text}"</p>
-              <div className="mt-2 flex items-center justify-between font-normal not-italic text-[10px] text-slate-400">
-                <span className="font-semibold text-slate-500">{latestComment.authorName}</span>
-                <span className="flex items-center space-x-0.5">
-                  <span>Nota dada: {latestComment.rating}</span>
+              <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between font-normal not-italic text-[11px] text-slate-500">
+                <span className="font-bold text-slate-700">Por: {latestComment.authorName}</span>
+                <span className="flex items-center space-x-1 font-semibold bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-md font-mono text-[10px]">
+                  <span>Nota: {latestComment.rating}</span>
                   <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
                 </span>
               </div>
@@ -275,14 +275,16 @@ export default function EditorCard({
                 Avaliações anteriores:
               </p>
               {editor.comments.slice(1).map((comment) => (
-                <div key={comment.id} className="bg-white/80 border border-slate-100 rounded-lg p-2.5 text-[11px] text-slate-600">
+                <div key={comment.id} className="bg-white hover:bg-slate-50/50 border border-slate-150/60 rounded-lg p-2.5 text-[11px] text-slate-600 shadow-3xs transition-colors">
                   <p className="italic">"{comment.text}"</p>
-                  <div className="mt-1.5 flex items-center justify-between text-[10px] text-slate-400">
-                    <span className="font-semibold text-slate-500">{comment.authorName}</span>
-                    <div className="flex items-center space-x-1">
-                      <span>{comment.rating}</span>
-                      <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
-                      <span className="ml-1 text-slate-300">|</span>
+                  <div className="mt-2 pt-1.5 border-t border-slate-100 flex items-center justify-between font-normal text-[11px] text-slate-500">
+                    <span className="font-bold text-slate-700">Por: {comment.authorName}</span>
+                    <div className="flex items-center space-x-1.5 font-medium text-[10px]">
+                      <span className="font-semibold text-amber-700 bg-amber-50 px-1 py-0.5 rounded-sm flex items-center gap-0.5 font-mono">
+                        <span>{comment.rating}</span>
+                        <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
+                      </span>
+                      <span className="text-slate-300">|</span>
                       <span>{new Date(comment.createdAt).toLocaleDateString('pt-BR')}</span>
                     </div>
                   </div>

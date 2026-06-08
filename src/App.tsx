@@ -12,8 +12,6 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-const STORAGE_KEY = 'catalogo_editores_data_v1';
-
 export default function App() {
   // State for all editors
   const [editors, setEditors] = useState<Editor[]>([]);
@@ -39,27 +37,25 @@ export default function App() {
   // Operation alert notifications
   const [alertMessage, setAlertMessage] = useState<{ text: string; type: 'success' | 'info' } | null>(null);
 
-  // 1. Load initial data from localStorage or fallback to standard presets
-  useEffect(() => {
-    const savedData = localStorage.getItem(STORAGE_KEY);
-    if (savedData) {
-      try {
-        setEditors(JSON.parse(savedData));
-      } catch (err) {
-        console.error('Failed to parse localStorage data, utilizing defaults', err);
-        setEditors(INITIAL_EDITORS);
+  // Fetch all editors from the shared back-end API
+  const fetchEditors = async () => {
+    try {
+      const res = await fetch('/api/editors');
+      if (res.ok) {
+        const data = await res.json();
+        setEditors(data);
       }
-    } else {
-      setEditors(INITIAL_EDITORS);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_EDITORS));
+    } catch (err) {
+      console.error('Failed to fetch editors from server API:', err);
     }
-  }, []);
-
-  // Save changes to storage whenever editors change
-  const saveToStorage = (updatedEditors: Editor[]) => {
-    setEditors(updatedEditors);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedEditors));
   };
+
+  // Initial load and auto-refresh polling every 5 seconds for real-time simultaneous synchronization
+  useEffect(() => {
+    fetchEditors();
+    const interval = setInterval(fetchEditors, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Trigger brief alert confirmation banner
   const triggerAlert = (text: string, type: 'success' | 'info' = 'success') => {
@@ -85,16 +81,17 @@ export default function App() {
     triggerAlert('Filtros redefinidos com sucesso.', 'info');
   };
 
-  // 3. Database operations (CRUD)
+  // 3. Database operations (CRUD) via Server REST API
   
   // ADD or EDIT editor
-  const handleSaveEditor = (formData: any) => {
-    if (formData.id) {
-      // EDIT existing editor
-      const updated = editors.map(editor => {
-        if (editor.id === formData.id) {
-          return {
-            ...editor,
+  const handleSaveEditor = async (formData: any) => {
+    try {
+      if (formData.id) {
+        // EDIT existing editor on server
+        const res = await fetch(`/api/editors/${formData.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
             name: formData.name,
             email: formData.email,
             phone: formData.phone,
@@ -102,83 +99,84 @@ export default function App() {
             avatarUrl: formData.avatarUrl,
             componentes: formData.componentes,
             services: formData.services
-          };
+          })
+        });
+        
+        if (res.ok) {
+          const updatedEditor = await res.json();
+          setEditors(prev => prev.map(e => e.id === formData.id ? updatedEditor : e));
+          triggerAlert(`Cadastro de ${formData.name} atualizado com sucesso!`);
+        } else {
+          const err = await res.json();
+          triggerAlert(`Erro ao atualizar: ${err.error || 'Erro no servidor'}`, 'info');
         }
-        return editor;
-      });
-      saveToStorage(updated);
-      triggerAlert(`Cadastro de ${formData.name} atualizado com sucesso!`);
-    } else {
-      // CREATE new editor
-      const newComment: Comment = {
-        id: `c-${Date.now()}`,
-        authorName: formData.initialCommentAuthor || 'Coordenação',
-        rating: formData.initialCommentRating || 5,
-        text: formData.initialCommentText || 'Cadastro inicial realizado sem feedbacks anteriores.',
-        createdAt: new Date().toISOString()
-      };
-
-      const newEditor: Editor = {
-        id: `editor-${Date.now()}`,
-        name: formData.name,
-        email: formData.email,
-        phone: formData.phone,
-        bio: formData.bio || undefined,
-        avatarUrl: formData.avatarUrl || undefined,
-        componentes: formData.componentes,
-        services: formData.services,
-        rating: newComment.rating,
-        comments: [newComment]
-      };
-
-      saveToStorage([newEditor, ...editors]);
-      triggerAlert(`Editor(a) ${formData.name} cadastrado(a) com sucesso!`);
-      
-      // Auto switch view to the first checked discipline for easy verification
-      if (formData.componentes.length > 0 && !formData.componentes.includes(selectedComponente)) {
-        setSelectedComponente(formData.componentes[0] as ComponenteCurricular);
+      } else {
+        // CREATE new editor on server
+        const res = await fetch('/api/editors', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+        
+        if (res.ok) {
+          const newEditor = await res.json();
+          setEditors(prev => [newEditor, ...prev]);
+          triggerAlert(`Editor(a) ${formData.name} cadastrado(a) com sucesso!`);
+          
+          // Auto switch view to the first checked discipline for easy verification
+          if (formData.componentes.length > 0 && !formData.componentes.includes(selectedComponente)) {
+            setSelectedComponente(formData.componentes[0] as ComponenteCurricular);
+          }
+        } else {
+          triggerAlert('Erro ao cadastrar novo editor no servidor.', 'info');
+        }
       }
+    } catch (err) {
+      console.error('Error saving editor:', err);
+      triggerAlert('Não foi possível salvar devido a um erro de conexão.', 'info');
     }
     setEditorToEdit(null);
   };
 
-  // DELETE editor
-  const handleDeleteEditor = (id: string) => {
+  // DELETE editor from server
+  const handleDeleteEditor = async (id: string) => {
     const editorName = editors.find(e => e.id === id)?.name || 'Profissional';
-    const updated = editors.filter(e => e.id !== id);
-    saveToStorage(updated);
-    triggerAlert(`Cadastro de ${editorName} removido do catálogo.`, 'info');
+    try {
+      const res = await fetch(`/api/editors/${id}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        setEditors(prev => prev.filter(e => e.id !== id));
+        triggerAlert(`Cadastro de ${editorName} removido do catálogo.`, 'info');
+      } else {
+        triggerAlert('Erro ao remover cadastro do servidor.', 'info');
+      }
+    } catch (err) {
+      console.error('Error deleting editor:', err);
+      triggerAlert('Não foi possível remover o cadastro.', 'info');
+    }
   };
 
-  // ADD comment / rating review
-  const handleSaveComment = (editorId: string, commentData: Omit<Comment, 'id' | 'createdAt'>) => {
-    const newComment: Comment = {
-      id: `c-${Date.now()}`,
-      authorName: commentData.authorName,
-      rating: commentData.rating,
-      text: commentData.text,
-      createdAt: new Date().toISOString()
-    };
-
-    const updated = editors.map(editor => {
-      if (editor.id === editorId) {
-        const updatedComments = [newComment, ...(editor.comments || [])];
-        // Recalculate average rating
-        const sum = updatedComments.reduce((acc, c) => acc + c.rating, 0);
-        const avg = Math.round((sum / updatedComments.length) * 10) / 10;
-
-        return {
-          ...editor,
-          comments: updatedComments,
-          rating: avg
-        };
+  // ADD comment / rating review on server
+  const handleSaveComment = async (editorId: string, commentData: Omit<Comment, 'id' | 'createdAt'>) => {
+    try {
+      const res = await fetch(`/api/editors/${editorId}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(commentData)
+      });
+      if (res.ok) {
+        const updatedEditor = await res.json();
+        setEditors(prev => prev.map(e => e.id === editorId ? updatedEditor : e));
+        const editorName = updatedEditor.name || 'Editor';
+        triggerAlert(`Obrigado! Sua avaliação para ${editorName} foi registrada.`);
+      } else {
+        triggerAlert('Erro ao salvar avaliação no servidor.', 'info');
       }
-      return editor;
-    });
-
-    saveToStorage(updated);
-    const editorName = editors.find(e => e.id === editorId)?.name || '';
-    triggerAlert(`Obrigado! Sua avaliação para ${editorName} foi registrada.`);
+    } catch (err) {
+      console.error('Error saving comment:', err);
+      triggerAlert('Não foi possível registrar a nota.', 'info');
+    }
     setEditorToReview(null);
   };
 
