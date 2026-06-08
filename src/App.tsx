@@ -128,7 +128,12 @@ export default function App() {
             setSelectedComponente(formData.componentes[0] as ComponenteCurricular);
           }
         } else {
-          triggerAlert('Erro ao cadastrar novo editor no servidor.', 'info');
+          try {
+            const err = await res.json();
+            triggerAlert(`Erro ao cadastrar: ${err.error || 'Erro no servidor'}`, 'info');
+          } catch {
+            triggerAlert('Erro ao cadastrar novo editor no servidor.', 'info');
+          }
         }
       }
     } catch (err) {

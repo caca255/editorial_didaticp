@@ -48,128 +48,178 @@ getEditors();
 // API Routes
 // GET all editors
 app.get('/api/editors', (req, res) => {
-  const editors = getEditors();
-  res.json(editors);
+  try {
+    const editors = getEditors();
+    res.json(editors);
+  } catch (err: any) {
+    console.error('Error in GET /api/editors:', err);
+    res.status(500).json({ error: 'Erro ao buscar editores', details: err.message });
+  }
 });
 
 // CREATE new editor
 app.post('/api/editors', (req, res) => {
-  const formData = req.body;
-  
-  const newComment: Comment = {
-    id: `c-${Date.now()}`,
-    authorName: formData.initialCommentAuthor || 'Coordenação',
-    rating: Number(formData.initialCommentRating || 5),
-    text: formData.initialCommentText || 'Cadastro inicial realizado sem feedbacks anteriores.',
-    createdAt: new Date().toISOString()
-  };
+  try {
+    const formData = req.body;
+    
+    if (!formData || !formData.name || !formData.email || !formData.phone) {
+      return res.status(400).json({ error: 'Dados obrigatórios ausentes. Verifique nome, e-mail e telefone.' });
+    }
 
-  const newEditor: Editor = {
-    id: `editor-${Date.now()}`,
-    name: formData.name,
-    email: formData.email,
-    phone: formData.phone,
-    bio: formData.bio || undefined,
-    avatarUrl: formData.avatarUrl || undefined,
-    componentes: formData.componentes || [],
-    services: formData.services || [],
-    rating: newComment.rating,
-    comments: [newComment]
-  };
+    const newComment: Comment = {
+      id: `c-${Date.now()}`,
+      authorName: formData.initialCommentAuthor || 'Coordenação',
+      rating: Number(formData.initialCommentRating !== undefined ? formData.initialCommentRating : 5),
+      text: formData.initialCommentText || 'Cadastro inicial realizado sem feedbacks anteriores.',
+      createdAt: new Date().toISOString()
+    };
 
-  const editors = getEditors();
-  const updated = [newEditor, ...editors];
-  saveEditors(updated);
+    const newEditor: Editor = {
+      id: `editor-${Date.now()}`,
+      name: formData.name,
+      email: formData.email,
+      phone: formData.phone,
+      bio: formData.bio || undefined,
+      avatarUrl: formData.avatarUrl || undefined,
+      componentes: formData.componentes || [],
+      services: formData.services || [],
+      rating: newComment.rating,
+      comments: [newComment]
+    };
 
-  res.status(201).json(newEditor);
+    const editors = getEditors();
+    const updated = [newEditor, ...editors];
+    
+    const saved = saveEditors(updated);
+    if (!saved) {
+      return res.status(500).json({ error: 'Não foi possível salvar o arquivo do banco de dados (JSON).' });
+    }
+
+    res.status(201).json(newEditor);
+  } catch (err: any) {
+    console.error('Error in POST /api/editors:', err);
+    res.status(500).json({ error: 'Erro ao cadastrar editor no servidor', details: err.message });
+  }
 });
 
 // UPDATE editor
 app.put('/api/editors/:id', (req, res) => {
-  const { id } = req.params;
-  const formData = req.body;
+  try {
+    const { id } = req.params;
+    const formData = req.body;
 
-  const editors = getEditors();
-  let updatedEditor: Editor | null = null;
-  const updated = editors.map(editor => {
-    if (editor.id === id) {
-      updatedEditor = {
-        ...editor,
-        name: formData.name,
-        email: formData.email,
-        phone: formData.phone,
-        bio: formData.bio || undefined,
-        avatarUrl: formData.avatarUrl || undefined,
-        componentes: formData.componentes || [],
-        services: formData.services || []
-      };
-      return updatedEditor;
+    if (!formData || !formData.name || !formData.email || !formData.phone) {
+      return res.status(400).json({ error: 'Dados obrigatórios ausentes. Verifique nome, e-mail e telefone.' });
     }
-    return editor;
-  });
 
-  if (!updatedEditor) {
-    return res.status(404).json({ error: 'Editor não encontrado' });
+    const editors = getEditors();
+    let updatedEditor: Editor | null = null;
+    const updated = editors.map(editor => {
+      if (editor.id === id) {
+        updatedEditor = {
+          ...editor,
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          bio: formData.bio || undefined,
+          avatarUrl: formData.avatarUrl || undefined,
+          componentes: formData.componentes || [],
+          services: formData.services || []
+        };
+        return updatedEditor;
+      }
+      return editor;
+    });
+
+    if (!updatedEditor) {
+      return res.status(404).json({ error: 'Editor não encontrado' });
+    }
+
+    const saved = saveEditors(updated);
+    if (!saved) {
+      return res.status(500).json({ error: 'Não foi possível atualizar o banco de dados.' });
+    }
+    res.json(updatedEditor);
+  } catch (err: any) {
+    console.error(`Error in PUT /api/editors/${req.params.id}:`, err);
+    res.status(500).json({ error: 'Erro ao atualizar editor no servidor', details: err.message });
   }
-
-  saveEditors(updated);
-  res.json(updatedEditor);
 });
 
 // ADD comment / rating review to editor
 app.post('/api/editors/:id/comments', (req, res) => {
-  const { id } = req.params;
-  const commentData = req.body; // authorName, rating, text
+  try {
+    const { id } = req.params;
+    const commentData = req.body; // authorName, rating, text
 
-  const newComment: Comment = {
-    id: `c-${Date.now()}`,
-    authorName: commentData.authorName,
-    rating: Number(commentData.rating),
-    text: commentData.text,
-    createdAt: new Date().toISOString()
-  };
-
-  const editors = getEditors();
-  let updatedEditor: Editor | null = null;
-
-  const updated = editors.map(editor => {
-    if (editor.id === id) {
-      const updatedComments = [newComment, ...(editor.comments || [])];
-      // Recalculate average rating
-      const sum = updatedComments.reduce((acc, c) => acc + c.rating, 0);
-      const avg = Math.round((sum / updatedComments.length) * 10) / 10;
-
-      updatedEditor = {
-        ...editor,
-        comments: updatedComments,
-        rating: avg
-      };
-      return updatedEditor;
+    if (!commentData || !commentData.authorName || !commentData.text) {
+      return res.status(400).json({ error: 'Dados obrigatórios ausentes para avaliação.' });
     }
-    return editor;
-  });
 
-  if (!updatedEditor) {
-    return res.status(404).json({ error: 'Editor não encontrado' });
+    const newComment: Comment = {
+      id: `c-${Date.now()}`,
+      authorName: commentData.authorName,
+      rating: Number(commentData.rating !== undefined ? commentData.rating : 5),
+      text: commentData.text,
+      createdAt: new Date().toISOString()
+    };
+
+    const editors = getEditors();
+    let updatedEditor: Editor | null = null;
+
+    const updated = editors.map(editor => {
+      if (editor.id === id) {
+        const updatedComments = [newComment, ...(editor.comments || [])];
+        // Recalculate average rating
+        const sum = updatedComments.reduce((acc, c) => acc + c.rating, 0);
+        const avg = Math.round((sum / updatedComments.length) * 10) / 10;
+
+        updatedEditor = {
+          ...editor,
+          comments: updatedComments,
+          rating: avg
+        };
+        return updatedEditor;
+      }
+      return editor;
+    });
+
+    if (!updatedEditor) {
+      return res.status(404).json({ error: 'Editor não encontrado' });
+    }
+
+    const saved = saveEditors(updated);
+    if (!saved) {
+      return res.status(500).json({ error: 'Não foi possível registrar a avaliação no arquivo.' });
+    }
+    res.json(updatedEditor);
+  } catch (err: any) {
+    console.error(`Error in POST /api/editors/${req.params.id}/comments:`, err);
+    res.status(500).json({ error: 'Erro ao adicionar avaliação no servidor', details: err.message });
   }
-
-  saveEditors(updated);
-  res.json(updatedEditor);
 });
 
 // DELETE editor
 app.delete('/api/editors/:id', (req, res) => {
-  const { id } = req.params;
-  
-  const editors = getEditors();
-  const editorExists = editors.some(e => e.id === id);
-  if (!editorExists) {
-    return res.status(404).json({ error: 'Editor não encontrado' });
-  }
+  try {
+    const { id } = req.params;
+    
+    const editors = getEditors();
+    const editorExists = editors.some(e => e.id === id);
+    if (!editorExists) {
+      return res.status(404).json({ error: 'Editor não encontrado' });
+    }
 
-  const updated = editors.filter(e => e.id !== id);
-  saveEditors(updated);
-  res.json({ success: true });
+    const updated = editors.filter(e => e.id !== id);
+    const saved = saveEditors(updated);
+    if (!saved) {
+      return res.status(500).json({ error: 'Não foi possível remover o editor do arquivo.' });
+    }
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error(`Error in DELETE /api/editors/${req.params.id}:`, err);
+    res.status(500).json({ error: 'Erro ao remover editor no servidor', details: err.message });
+  }
 });
 
 // Vite middleware for development / Static file serving for production
