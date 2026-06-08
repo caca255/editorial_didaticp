@@ -1,6 +1,6 @@
 {
-  "name": "Catálogo de Editores",
-  "description": "Plataforma de busca e cadastro de editores de material didático por componente curricular, com filtros de serviços e notas.",
+  "name": "Catálogo de Editores Externos",
+  "description": "Plataforma de busca e cadastro de editores de material didático, com filtros de serviços e notas.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
